@@ -2,7 +2,11 @@
 <html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cờ Úp Phân Tích</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Serif+SC:wght@700&display=swap">
+<!-- Adds COOP/COEP headers on static hosts (GitHub Pages) so the WebAssembly engine can use threads -->
+<!-- require-corp everywhere: Safari has no COEP "credentialless", the script's default outside Chrome/Firefox -->
+<script>window.coi={coepCredentialless:()=>false};</script>
+<script src="coi-serviceworker.js"></script>
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Serif+SC:wght@700&display=swap">
 <style>
 [hidden]{display:none!important}
 body{margin:0}
@@ -145,7 +149,7 @@ ol.log{margin:0;padding-left:28px;max-height:220px;overflow:auto;font-size:.85re
       <section class="card">
         <h2>Gợi ý <span id="depth"></span></h2>
         <div class="seg" id="speed" role="group" aria-label="Thời gian tính"><button type="button" data-speed="fast">Nhanh</button><button type="button" data-speed="mid">Vừa</button><button type="button" data-speed="deep">Kỹ</button></div>
-        <p class="warn" id="engine-warn" hidden>Đang dùng engine dự phòng (yếu, dễ gợi ý nước liều). Chạy <code>node server.js</code> trong thư mục trang để dùng Pikafish, rồi tải lại trang.</p>
+        <p class="warn" id="engine-warn" hidden>Đang dùng engine dự phòng (yếu, dễ gợi ý nước liều). Cờ Úp dùng Pikafish ngay trong trình duyệt nếu trình duyệt hỗ trợ; cờ tướng thường cần chạy <code>node server.js</code> trong thư mục trang, rồi tải lại trang.</p>
         <ol class="hints" id="hints"></ol>
         <p class="muted" id="hint-note">Điểm tính theo bên đang đi, 1 điểm ≈ 1 Tốt. Nước lật quân được tính trung bình theo xác suất các quân úp còn lại.</p>
       </section>
@@ -389,24 +393,55 @@ function recentHistory(){
 }
 function enginePosition(){const h=recentHistory();return{fen:toFen(h.first),moves:h.moves.join(' ')};}
 const uciToMove=u=>{const sq=x=>(+x[1])*9+'abcdefghi'.indexOf(x[0]);return sq(u.slice(0,2))*90+sq(u.slice(2,4));};
+// ---- Pikafish in the browser (WebAssembly, Cờ Úp only; see wasm/) ----
+// Used when server.js is not reachable. Needs SharedArrayBuffer (cross-origin isolation,
+// from server headers or coi-serviceworker.js).
+let wasmEng=null,wasmName=null,wasmP=null,wasmFailed=false,wasmSeq=0,engineSrc='js';   // engineSrc: 'server' | 'wasm' | 'js'
+const wasmSubs=new Map();   // request id -> {onData, onFail}
+function startWasm(){
+  if(wasmP)return wasmP;
+  wasmP=new Promise(resolve=>{
+    if(typeof WebAssembly!=='object'||!self.crossOriginIsolated){wasmFailed=true;resolve(false);return;}
+    let w;try{w=new Worker('wasm/jieqi-worker.js');}catch(e){wasmFailed=true;resolve(false);return;}
+    const fail=()=>{clearTimeout(to);w.terminate();wasmEng=null;wasmFailed=true;resolve(false);
+      const subs=[...wasmSubs.values()];wasmSubs.clear();subs.forEach(s=>s.onFail());};
+    const to=setTimeout(fail,20000);
+    w.onerror=fail;
+    w.onmessage=e=>{const m=e.data;
+      if(m.type==='ready'){clearTimeout(to);wasmEng=w;wasmName=m.name;resolve(true);}
+      else if(m.type==='error')fail();
+      else if(m.type==='data'){const s=wasmSubs.get(m.id);if(s){if(m.data.done)wasmSubs.delete(m.id);s.onData(m.data);}}};
+  });
+  return wasmP;
+}
+// One Pikafish request, to server.js (SSE) or to the WebAssembly worker, by engineSrc.
+// onData gets {depth, list:[{uci,score}], done, aborted?}; onFail runs if the engine goes away.
+function pikaStream(q,onData,onFail){
+  if(engineSrc==='wasm'){
+    const id=++wasmSeq;wasmSubs.set(id,{onData,onFail});
+    wasmEng.postMessage({type:'analyse',id,fen:q.fen,moves:q.moves||'',ms:q.ms,multipv:q.multipv});
+    return{close(){if(wasmSubs.delete(id)&&wasmEng)wasmEng.postMessage({type:'cancel'});}};
+  }
+  const src=new EventSource(`${API}/analyse?fen=${encodeURIComponent(q.fen)}${q.moves?'&moves='+encodeURIComponent(q.moves):''}&ms=${q.ms}&multipv=${q.multipv}${q.variant?'&variant='+q.variant:''}`);
+  src.onmessage=e=>onData(JSON.parse(e.data));
+  src.onerror=()=>{src.close();onFail();};
+  return{close(){src.close();}};
+}
 function analysePika(id){
   let got=false;
   const pos=enginePosition();
-  es=new EventSource(`${API}/analyse?fen=${encodeURIComponent(pos.fen)}&moves=${encodeURIComponent(pos.moves)}&ms=${THINK_MS}&multipv=${HINTS}&variant=${st.variant}`);
-  const mine=es;
-  es.onmessage=e=>{
+  const mine=es=pikaStream({fen:pos.fen,moves:pos.moves,ms:THINK_MS,multipv:HINTS,variant:st.variant},d=>{
     if(id!==reqId){mine.close();return;}
-    const d=JSON.parse(e.data);
     if(d.aborted){mine.close();return;}
     if(d.list&&d.list.length){got=true;
       analysis={depth:d.depth,list:d.list.map(x=>({m:uciToMove(x.uci),score:x.score})),done:false};
       drawHints();drawBoard();drawStatus();}
     if(d.done){mine.close();
       if(analysis&&analysis.list)riskCheck(id);else if(analysis){analysis.done=true;drawHints();drawStatus();}}
-  };
-  es.onerror=()=>{mine.close();if(id!==reqId)return;
-    if(!got){pika=false;engineLabel='JS';analyseJS(id);}   // server went away: fall back to the JS engine
-    else if(analysis){analysis.done=true;drawHints();drawStatus();}};
+  },()=>{if(id!==reqId)return;
+    // engine went away: drop it and pick again (server -> WebAssembly -> JS)
+    if(!got){if(engineSrc==='server')pika=false;analyse();}
+    else if(analysis){analysis.done=true;drawHints();drawStatus();}});
 }
 // ---- probability layer on top of Pikafish ----
 // For each flip move among the top suggestions, evaluate every piece the flip could reveal
@@ -416,10 +451,10 @@ function analysePika(id){
 const RISK=0.5,RISK_MS=350,RISK_TOP=4;
 function pikaBest(fen,ms){
   return new Promise((resolve,reject)=>{
-    const src=new EventSource(`${API}/analyse?fen=${encodeURIComponent(fen)}&ms=${ms}&multipv=1`);es=src;let last=null;
-    src.onmessage=e=>{const d=JSON.parse(e.data);if(d.list&&d.list.length)last=d.list[0].score;
-      if(d.done){src.close();if(d.aborted&&last===null)reject(new Error('aborted'));else resolve(last===null?-E.MATE:last);}};
-    src.onerror=()=>{src.close();reject(new Error('stream'));};
+    let last=null;
+    const src=es=pikaStream({fen,ms,multipv:1},d=>{if(d.list&&d.list.length)last=d.list[0].score;
+      if(d.done){src.close();if(d.aborted&&last===null)reject(new Error('aborted'));else resolve(last===null?-E.MATE:last);}},
+      ()=>reject(new Error('stream')));
   });
 }
 async function riskCheck(id){
@@ -455,8 +490,11 @@ function analyse(){
   if(pika===false&&Date.now()-pikaChecked>5000)pika=null;   // server may have been started since
   if(pika===null){pikaChecked=Date.now();checkPika().then(()=>{if(id===reqId)analyse();});return;}
   const eng=st.variant==='xiangqi'?pikaXQ:pika;
-  if(pika&&eng){engineLabel=eng;analysePika(id);return;}
-  engineLabel='JS';analyseJS(id);
+  if(pika&&eng){engineSrc='server';engineLabel=eng;analysePika(id);return;}
+  if(st.variant!=='xiangqi'&&!wasmFailed){
+    if(!wasmEng){startWasm().then(()=>{if(id===reqId)analyse();});return;}
+    engineSrc='wasm';engineLabel=`${wasmName} (trình duyệt)`;analysePika(id);return;}
+  engineSrc='js';engineLabel='JS';analyseJS(id);
 }
 function analyseJS(id){
   const fb=setTimeout(()=>{if(id===reqId&&!analysis){if(worker){worker.terminate();worker=null;}runSync(id);}},2500);

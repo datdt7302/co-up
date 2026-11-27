@@ -1,0 +1,96 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index 0e1c959..2e18fb3 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -21,8 +21,23 @@
+ #include "thread.h"
+ #include "uci.h"
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
++
+ using namespace Stockfish;
+ 
++#ifdef __EMSCRIPTEN__
++// WebAssembly entry point: the JS side calls this once per UCI command line.
++// The runtime stays alive after main() returns, and the search runs on a pthread,
++// so "stop" can arrive while a "go" is in progress.
++extern "C" EMSCRIPTEN_KEEPALIVE void uci_command(const char* cmd) {
++  char empty[] = "";
++  char* argv[] = { empty, const_cast<char*>(cmd) };
++  UCI::loop(2, argv);
++}
++#endif
++
+ int main(int argc, char* argv[]) {
+ 
+   std::cout << engine_info() << std::endl;
+@@ -37,6 +52,10 @@ int main(int argc, char* argv[]) {
+   Search::clear(); // After threads are up
+   Eval::NNUE::init();
+ 
++#ifdef __EMSCRIPTEN__
++  return 0; // keep the threads; commands arrive through uci_command()
++#endif
++
+   UCI::loop(argc, argv);
+ 
+   Threads.set(0);
+diff --git a/src/tt.cpp b/src/tt.cpp
+index c7118ae..d1245b0 100644
+--- a/src/tt.cpp
++++ b/src/tt.cpp
+@@ -85,6 +85,13 @@ void TranspositionTable::resize(size_t mbSize) {
+ 
+ void TranspositionTable::clear() {
+ 
++#ifdef __EMSCRIPTEN__
++  // WebAssembly build: threads come from a fixed pool that the search threads already use,
++  // so starting more here would wait forever for a free worker.
++  std::memset(table, 0, clusterCount * sizeof(Cluster));
++  return;
++#endif
++
+   std::vector<std::thread> threads;
+ 
+   for (size_t idx = 0; idx < Options["Threads"]; ++idx)
+diff --git a/src/uci.cpp b/src/uci.cpp
+index 634fe87..1a5c6f6 100644
+--- a/src/uci.cpp
++++ b/src/uci.cpp
+@@ -270,17 +270,32 @@ namespace {
+ 
+ void UCI::loop(int argc, char* argv[]) {
+ 
++#ifdef __EMSCRIPTEN__
++  // WebAssembly build: called once per command (see uci_command() in main.cpp),
++  // so the position must survive between calls.
++  static Position pos;
++  static StateListPtr states(new std::deque<StateInfo>(1));
++  static std::vector<Move> banmoves = {};
++  static bool initialized = false;
++  if (!initialized)
++  {
++      pos.set(StartFEN, &states->back(), Threads.main());
++      initialized = true;
++  }
++  string token, cmd;
++#else
+   Position pos;
+   string token, cmd;
+   StateListPtr states(new std::deque<StateInfo>(1));
+ 
+   pos.set(StartFEN, &states->back(), Threads.main());
+ 
++  std::vector<Move> banmoves = {};
++#endif
++
+   for (int i = 1; i < argc; ++i)
+       cmd += std::string(argv[i]) + " ";
+ 
+-  std::vector<Move> banmoves = {};
+-
+   do {
+       if (argc == 1 && !getline(cin, cmd)) // Wait for an input or an end-of-file (EOF) indication
+           cmd = "quit";

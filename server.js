@@ -121,7 +121,7 @@ class Engine{
 const engines={jieqi:new Engine(PATHS.jieqi),xiangqi:new Engine(PATHS.xiangqi)};
 
 // ---- http ----
-const STATIC={'/':'index.html','/index.html':'index.html','/engine.js':'engine.js'};
+const STATIC={'/':'index.html','/index.html':'index.html','/engine.js':'engine.js','/coi-serviceworker.js':'coi-serviceworker.js'};
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 const FEN_OK=/^[A-Za-z0-9/ -]{10,200}$/;
 

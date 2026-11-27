@@ -30,7 +30,7 @@ WORKDIR /app
 COPY --from=build /src/pikafish/src/PikaJieQi            pikafish/src/PikaJieQi
 COPY --from=build /src/pikafish-xiangqi/src/pikafish     pikafish-xiangqi/src/pikafish
 COPY --from=build /src/pikafish-xiangqi/src/pikafish.nnue pikafish-xiangqi/src/pikafish.nnue
-COPY server.js index.html engine.js ./
+COPY server.js index.html engine.js coi-serviceworker.js ./
 
 # Render's free tier: 0.1 CPU, 512 MB RAM -> one thread and small hash tables.
 # Render sets PORT itself (default 10000); 10000 is used here too so it also works without it.
