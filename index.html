@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cờ Úp Phân Tích</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Serif+SC:wght@700&display=swap">
+<style>
+[hidden]{display:none!important}
+body{margin:0}
+/* Layout: board left, analysis column right; stacks on phones. Jade accent on wood board. */
+:root{
+  --bg:#eaefec; --panel:#ffffff; --fg:#17211d; --muted:#5a6a62; --rule:#d3ddd7;
+  --accent:#1c7556; --accent-weak:#d5ebe1; --accent-fg:#ffffff;
+  --gold:#e0a800; --gold-weak:#fff3c4; --gold-fg:#2a1f00;
+  --board:#e2c38c; --board-line:#6a4720; --piece:#f8f0da; --piece-edge:#a9844c;
+  --red:#b0261c; --ink:#1c1c1a; --back:#2e4a40; --back-edge:#15261f; --danger:#b0261c;
+  --f-ui:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-piece:"Noto Serif SC","Songti SC","SimSun","PMingLiU",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111614; --panel:#1a211e; --fg:#e3ebe6; --muted:#97a69e; --rule:#2b3531;
+  --accent:#4dbf94; --accent-weak:#1c372d; --accent-fg:#0d1f18;
+  --gold:#f5c542; --gold-weak:#3a3010; --gold-fg:#1f1700;
+  --board:#b48f58; --board-line:#3f2a11; --piece:#efe4c6; --piece-edge:#8a6936;
+  --red:#a8231a; --ink:#1c1c1a; --back:#2a463c; --back-edge:#0f1c17; --danger:#f07a6e; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#111614; --panel:#1a211e; --fg:#e3ebe6; --muted:#97a69e; --rule:#2b3531;
+  --accent:#4dbf94; --accent-weak:#1c372d; --accent-fg:#0d1f18;
+  --gold:#f5c542; --gold-weak:#3a3010; --gold-fg:#1f1700;
+  --board:#b48f58; --board-line:#3f2a11; --piece:#efe4c6; --piece-edge:#8a6936;
+  --red:#a8231a; --ink:#1c1c1a; --back:#2a463c; --back-edge:#0f1c17; --danger:#f07a6e; color-scheme:dark;}
+html,body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:15px}
+.app{max-width:1180px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-size:1.6rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 small{display:block;font-size:.85rem;font-weight:400;color:var(--muted);letter-spacing:0;margin-top:4px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;border-radius:0;background:transparent}
+#speed{align-self:flex-start}
+#speed button{padding:4px 10px;font-size:.8rem}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+button{font:inherit;font-weight:500;color:var(--fg);background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,600px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.board-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.status{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.85rem;font-weight:600;background:var(--accent-weak);color:var(--fg)}
+.pill .dot{width:10px;height:10px;border-radius:50%}
+.pill.check{background:var(--danger);color:#fff}
+.best{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 14px;border-radius:12px;background:var(--panel);border:2px solid var(--rule)}
+.best.mine{border-color:var(--gold);background:var(--gold-weak)}
+.best .lbl{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:block}
+.best .big{font-size:1.25rem;font-weight:700}
+.best .grow{flex:1 1 220px;min-width:0}
+.best button.go{background:var(--gold);color:var(--gold-fg);border-color:var(--gold);font-weight:600}
+#board{width:100%;height:auto;display:block;touch-action:manipulation;user-select:none;border-radius:10px;cursor:pointer}
+.help{color:var(--muted);font-size:.85rem;margin:0;max-width:65ch}
+aside{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0;display:flex;justify-content:space-between;gap:8px}
+.card h2 span{text-transform:none;letter-spacing:0;font-weight:500}
+.hints{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.hints li button{width:100%;display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;text-align:left;padding:8px 10px}
+.hints li:first-child button{border-color:var(--gold);background:var(--gold-weak)}
+.hints li:first-child .rank{color:var(--gold-fg);background:var(--gold);border-radius:6px;text-align:center}
+.rank{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.mv{min-width:0}
+.mv b{font-weight:600}
+.mv small{display:block;color:var(--muted);font-weight:400;font-size:.8rem}
+.score{font-variant-numeric:tabular-nums;font-weight:700}
+.muted{color:var(--muted);font-size:.85rem}
+.warn{margin:0;padding:8px 10px;border-radius:8px;border:1px solid var(--gold);background:var(--gold-weak);font-size:.85rem}
+.warn code{font-size:.8rem}
+.pools{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:420px){.pools{grid-template-columns:1fr}}
+.pool h3{margin:0 0 6px;font-size:.9rem;display:flex;align-items:center;gap:6px}
+.prow{display:grid;grid-template-columns:22px 48px 22px 1fr;gap:6px;align-items:center;font-size:.85rem;font-variant-numeric:tabular-nums;padding:2px 0}
+.prow .ch{font-family:var(--f-piece);font-size:1rem}
+.bar{height:6px;border-radius:3px;background:var(--rule);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.prow.zero{opacity:.4}
+ol.log{margin:0;padding-left:28px;max-height:220px;overflow:auto;font-size:.85rem;display:flex;flex-direction:column;gap:2px;font-variant-numeric:tabular-nums}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.sheet{background:var(--panel);color:var(--fg);border-radius:14px;padding:18px;max-width:420px;width:100%;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.sheet h3{margin:0;font-size:1.05rem}
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.choices button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 6px}
+.choices .ch{font-family:var(--f-piece);font-size:1.5rem;line-height:1}
+.choices small{color:var(--muted);font-size:.75rem}
+.choices button:disabled{opacity:.35;cursor:not-allowed}
+.choices .wide{grid-column:1/-1}
+/* thinking indicator: spinner, progress bar over the think time, placeholder rows */
+.best{position:relative;overflow:hidden}
+.best .spin{display:inline-block;width:18px;height:18px;border:3px solid var(--gold-weak);border-top-color:var(--gold);border-radius:50%;vertical-align:-3px;margin-right:8px}
+.best .spin.sm{width:12px;height:12px;border-width:2px;vertical-align:-1px;margin:0 4px 0 6px}
+.best .prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--gold-weak)}
+.best .prog i{display:block;height:100%;width:100%;background:var(--gold);transform-origin:left;transform:scaleX(0);animation:fill linear forwards}
+.hints .skel{height:56px;border-radius:8px;background:var(--rule);opacity:.55}
+/* keep heights fixed while results stream in, so the page does not jump */
+.best{min-height:112px;box-sizing:border-box}
+.best .lbl,.best .big,.best .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.best .sub{display:block}
+.hints{min-height:180px}
+.hints li button{height:56px}
+.mv b,.mv small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.card h2 #depth{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fill{to{transform:scaleX(1)}}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:no-preference){
+  .hints li button{transition:border-color .15s}
+  .best .spin{animation:spin .8s linear infinite}
+  .hints .skel{animation:pulse 1.2s ease-in-out infinite}
+  .hints .skel:nth-child(2){animation-delay:.15s}.hints .skel:nth-child(3){animation-delay:.3s}
+}
+</style>
+
+<div class="app">
+  <header>
+    <h1><span id="title">Cờ Úp Phân Tích</span><small>Nhập nước đi của cả hai bên, máy tính gợi ý nước tiếp theo.</small></h1>
+    <div class="controls">
+      <div class="seg" id="variant" role="group" aria-label="Loại cờ">
+        <button type="button" data-variant="jieqi">Cờ Úp</button>
+        <button type="button" data-variant="xiangqi">Cờ Tướng</button>
+      </div>
+      <span class="muted">Tôi cầm</span>
+      <div class="seg" role="group" aria-label="Bên của tôi">
+        <button id="me-r" type="button">Đỏ</button>
+        <button id="me-b" type="button">Đen</button>
+      </div>
+      <button id="undo" type="button">↶ Lùi 1 nước</button>
+      <button id="reset" type="button">Ván mới</button>
+    </div>
+  </header>
+  <div class="grid">
+    <section class="board-col">
+      <div class="status" id="status"></div>
+      <div class="best" id="best"></div>
+      <svg id="board" viewBox="0 0 568 628" role="img" aria-label="Bàn cờ"></svg>
+      <p class="help" id="help">Bấm vào quân rồi bấm vào ô muốn đi tới. Nước của đối thủ cũng nhập như vậy. Khi lật một quân úp, chọn quân vừa lật ra. Khi bạn ăn quân úp của đối thủ, chọn quân đó là gì, hoặc chọn "Không rõ". Khi đối thủ ăn quân úp của bạn, không cần chọn gì. Bấm vào một gợi ý để đi luôn nước đó.</p>
+    </section>
+    <aside>
+      <section class="card">
+        <h2>Gợi ý <span id="depth"></span></h2>
+        <div class="seg" id="speed" role="group" aria-label="Thời gian tính"><button type="button" data-speed="fast">Nhanh</button><button type="button" data-speed="mid">Vừa</button><button type="button" data-speed="deep">Kỹ</button></div>
+        <p class="warn" id="engine-warn" hidden>Đang dùng engine dự phòng (yếu, dễ gợi ý nước liều). Chạy <code>node server.js</code> trong thư mục trang để dùng Pikafish, rồi tải lại trang.</p>
+        <ol class="hints" id="hints"></ol>
+        <p class="muted" id="hint-note">Điểm tính theo bên đang đi, 1 điểm ≈ 1 Tốt. Nước lật quân được tính trung bình theo xác suất các quân úp còn lại.</p>
+      </section>
+      <section class="card" id="pools-card">
+        <h2>Quân úp còn lại</h2>
+        <div class="pools" id="pools"></div>
+      </section>
+      <section class="card">
+        <h2>Biên bản <span id="movecount"></span></h2>
+        <ol class="log" id="log"></ol>
+      </section>
+    </aside>
+  </div>
+</div>
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
+
+<script src="engine.js"></script>
+
+<script>
+(function(){
+const E=ENGINE();
+const NAMES={K:'Tướng',A:'Sĩ',E:'Tượng',H:'Mã',R:'Xe',C:'Pháo',P:'Tốt',X:'?'};
+const CH={r:{K:'帥',A:'仕',E:'相',H:'馬',R:'車',C:'炮',P:'兵'},b:{K:'將',A:'士',E:'象',H:'馬',R:'車',C:'砲',P:'卒'}};
+const SIDE={r:'Đỏ',b:'Đen'};
+const START={R:2,H:2,C:2,A:2,E:2,P:5};
+const BACK=['R','H','E','A','K','A','E','H','R'];
+const S=60,M=44,KEY='coup-analyse-v1';
+// think time (max; the Pikafish server stops earlier once its best move is stable)
+const SPEEDS={fast:1000,mid:2500,deep:5000};
+let speed='fast';try{const v=localStorage.getItem('speed:co-up');if(SPEEDS[v])speed=v;}catch(e){}
+let THINK_MS=SPEEDS[speed];
+const HINTS=3;   // suggestions shown; each extra one costs the engine search time
+const $=id=>document.getElementById(id);
+
+const VARIANTS={jieqi:'Cờ Úp',xiangqi:'Cờ Tướng'};
+function initialBoard(variant){
+  const B=new Array(90).fill(null);
+  for(let f=0;f<9;f++){const t=BACK[f];
+    B[f]=t==='K'?{c:'r',t:'K',o:'K'}:{c:'r',t:'?',o:t};
+    B[81+f]=t==='K'?{c:'b',t:'K',o:'K'}:{c:'b',t:'?',o:t};}
+  for(const f of [1,7]){B[18+f]={c:'r',t:'?',o:'C'};B[63+f]={c:'b',t:'?',o:'C'};}
+  for(const f of [0,2,4,6,8]){B[27+f]={c:'r',t:'?',o:'P'};B[54+f]={c:'b',t:'?',o:'P'};}
+  if(variant==='xiangqi')for(const p of B)if(p)p.t=p.o;   // standard Xiangqi: every piece face up
+  return B;
+}
+const EMPTY_POOL={R:0,H:0,C:0,A:0,E:0,P:0};
+function freshState(me,variant){variant=variant==='xiangqi'?'xiangqi':'jieqi';
+  const pool=variant==='xiangqi'?{r:{...EMPTY_POOL},b:{...EMPTY_POOL}}:{r:{...START},b:{...START}};
+  return{variant,B:initialBoard(variant),turn:'r',me:me||'r',pool,uc:{r:0,b:0},log:[],hist:[],last:null};}
+let st;
+try{st=JSON.parse(localStorage.getItem(KEY));}catch(e){st=null;}
+if(!st||!Array.isArray(st.B)||st.B.length!==90)st=freshState('r');
+if(!st.variant)st.variant='jieqi';   // games saved before variants existed
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+function snap(){const{hist,...rest}=st;return JSON.stringify(rest);}
+
+let sel=-1,targets=[],analysis=null,worker=null,reqId=0,thinkStart=0;
+// progress bar that keeps its place across re-renders (negative delay = time already spent)
+const progBar=()=>`<div class="prog" aria-hidden="true"><i style="animation-duration:${THINK_MS}ms;animation-delay:-${Math.min(Date.now()-thinkStart,THINK_MS)}ms"></i></div>`;
+function drawSpeed(){for(const b of document.querySelectorAll('#speed button'))b.setAttribute('aria-pressed',b.dataset.speed===speed);}
+document.getElementById('speed').addEventListener('click',e=>{const b=e.target.closest('button[data-speed]');if(!b||b.dataset.speed===speed)return;
+  speed=b.dataset.speed;THINK_MS=SPEEDS[speed];try{localStorage.setItem('speed:co-up',speed);}catch(e){}drawSpeed();analyse();});
+drawSpeed();
+
+const coord=s=>'abcdefghi'[s%9]+(((s/9)|0)+1);
+const view=s=>{const f=s%9,r=(s/9)|0;return st.me==='r'?[f,9-r]:[8-f,r];};
+const unview=(x,y)=>st.me==='r'?(9-y)*9+x:y*9+(8-x);
+const px=v=>M+v*S;
+
+const HELP={
+  jieqi:$('help').textContent,
+  xiangqi:'Bấm vào quân rồi bấm vào ô muốn đi tới. Nước của đối thủ cũng nhập như vậy. Bấm vào một gợi ý để đi luôn nước đó.'};
+function render(){
+  E.setVariant(st.variant);
+  for(const b of document.querySelectorAll('#variant button'))b.setAttribute('aria-pressed',b.dataset.variant===st.variant);
+  const xq=st.variant==='xiangqi';
+  $('title').textContent=`${VARIANTS[st.variant]} Phân Tích`;
+  $('help').textContent=HELP[st.variant];
+  $('pools-card').hidden=xq;
+  $('hint-note').textContent=xq?'Điểm tính theo bên đang đi, 1 điểm ≈ 1 Tốt.':'Điểm tính theo bên đang đi, 1 điểm ≈ 1 Tốt. Nước lật quân được tính trung bình theo xác suất các quân úp còn lại.';
+  $('me-r').setAttribute('aria-pressed',st.me==='r');
+  $('me-b').setAttribute('aria-pressed',st.me==='b');
+  drawBoard();drawStatus();drawPools();drawLog();drawHints();
+}
+
+function drawBoard(){
+  const L=[];
+  const W=8*S,H=9*S;
+  L.push(`<rect x="0" y="0" width="${W+2*M}" height="${H+2*M}" rx="10" fill="var(--board)"/>`);
+  L.push(`<rect x="${M-6}" y="${M-6}" width="${W+12}" height="${H+12}" fill="none" stroke="var(--board-line)" stroke-width="2.5"/>`);
+  for(let y=0;y<10;y++)L.push(`<line x1="${px(0)}" y1="${px(y)}" x2="${px(8)}" y2="${px(y)}" stroke="var(--board-line)" stroke-width="1.2"/>`);
+  for(let x=0;x<9;x++){
+    if(x===0||x===8)L.push(`<line x1="${px(x)}" y1="${px(0)}" x2="${px(x)}" y2="${px(9)}" stroke="var(--board-line)" stroke-width="1.2"/>`);
+    else{L.push(`<line x1="${px(x)}" y1="${px(0)}" x2="${px(x)}" y2="${px(4)}" stroke="var(--board-line)" stroke-width="1.2"/>`);
+      L.push(`<line x1="${px(x)}" y1="${px(5)}" x2="${px(x)}" y2="${px(9)}" stroke="var(--board-line)" stroke-width="1.2"/>`);}
+  }
+  for(const [a,b] of [[0,2],[7,9]]){
+    L.push(`<line x1="${px(3)}" y1="${px(a)}" x2="${px(5)}" y2="${px(b)}" stroke="var(--board-line)" stroke-width="1.2"/>`);
+    L.push(`<line x1="${px(5)}" y1="${px(a)}" x2="${px(3)}" y2="${px(b)}" stroke="var(--board-line)" stroke-width="1.2"/>`);
+  }
+  L.push(`<text x="${px(2)}" y="${px(4.5)+9}" text-anchor="middle" font-family="var(--f-piece)" font-size="26" fill="var(--board-line)" opacity=".7">楚 河</text>`);
+  L.push(`<text x="${px(6)}" y="${px(4.5)+9}" text-anchor="middle" font-family="var(--f-piece)" font-size="26" fill="var(--board-line)" opacity=".7">漢 界</text>`);
+  for(let x=0;x<9;x++){const s=unview(x,9);L.push(`<text x="${px(x)}" y="${H+2*M-10}" text-anchor="middle" font-size="12" font-family="var(--f-ui)" fill="var(--board-line)">${'abcdefghi'[s%9]}</text>`);}
+  for(let y=0;y<10;y++){const s=unview(0,y);L.push(`<text x="12" y="${px(y)+4}" text-anchor="middle" font-size="12" font-family="var(--f-ui)" fill="var(--board-line)">${((s/9)|0)+1}</text>`);}
+  if(st.last){for(const s of st.last){const[x,y]=view(s);L.push(`<rect x="${px(x)-29}" y="${px(y)-29}" width="58" height="58" rx="6" fill="var(--accent)" opacity=".22"/>`);}}
+  // hint arrows
+  L.push(`<defs><marker id="ah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker><marker id="ahg" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--gold)"/></marker></defs>`);
+  if(analysis&&analysis.list&&st.turn===st.me){
+    analysis.list.slice(0,3).reverse().forEach((h,i,arr)=>{const rank=arr.length-1-i;
+      const[x1,y1]=view((h.m/90)|0),[x2,y2]=view(h.m%90);
+      if(rank===0)for(const[qx,qy]of[[x1,y1],[x2,y2]])L.push(`<rect x="${px(qx)-30}" y="${px(qy)-30}" width="60" height="60" rx="8" fill="var(--gold)" opacity=".45" stroke="var(--gold)" stroke-width="3"/>`);
+      const dx=px(x2)-px(x1),dy=px(y2)-px(y1),len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;
+      L.push(`<line x1="${px(x1)+ux*20}" y1="${px(y1)+uy*20}" x2="${px(x2)-ux*24}" y2="${px(y2)-uy*24}" stroke="${rank===0?'var(--gold)':'var(--accent)'}" stroke-width="${rank===0?9:5}" stroke-linecap="round" opacity="${rank===0?.95:.4}" marker-end="url(#${rank===0?'ahg':'ah'})"/>`);});
+  }
+  for(let s=0;s<90;s++){const p=st.B[s];if(!p)continue;const[x,y]=view(s);const cx=px(x),cy=px(y);
+    if(p.t==='?'){
+      L.push(`<circle cx="${cx}" cy="${cy}" r="26" fill="var(--back)" stroke="${p.c==='r'?'var(--red)':'var(--ink)'}" stroke-width="4"/>`);
+      L.push(`<circle cx="${cx}" cy="${cy}" r="17" fill="none" stroke="var(--back-edge)" stroke-width="1.5" stroke-dasharray="3 3"/>`);
+    }else{
+      const col=p.c==='r'?'var(--red)':'var(--ink)';
+      L.push(`<circle cx="${cx}" cy="${cy}" r="26" fill="var(--piece)" stroke="var(--piece-edge)" stroke-width="2"/>`);
+      L.push(`<circle cx="${cx}" cy="${cy}" r="21" fill="none" stroke="${col}" stroke-width="1.5"/>`);
+      L.push(`<text x="${cx}" y="${cy+10}" text-anchor="middle" font-family="var(--f-piece)" font-weight="700" font-size="28" fill="${col}">${CH[p.c][p.t]}</text>`);
+    }
+    if(s===sel)L.push(`<circle cx="${cx}" cy="${cy}" r="29" fill="none" stroke="var(--accent)" stroke-width="4"/>`);
+  }
+  for(const t of targets){const[x,y]=view(t);
+    if(st.B[t])L.push(`<circle cx="${px(x)}" cy="${px(y)}" r="29" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="6 4"/>`);
+    else L.push(`<circle cx="${px(x)}" cy="${px(y)}" r="8" fill="var(--accent)" opacity=".85"/>`);}
+  $('board').innerHTML=L.join('');
+}
+
+function drawStatus(){
+  const t=st.turn,mine=t===st.me;
+  let h=`<span class="pill"><span class="dot" style="background:${t==='r'?'var(--red)':'var(--ink)'}"></span>Lượt ${SIDE[t]} · ${mine?'bạn đi':'nhập nước của đối thủ'}</span>`;
+  if(E.inCheck(st.B,t))h+=`<span class="pill check">${SIDE[t]} đang bị chiếu</span>`;
+  if(analysis&&analysis.none)h+=`<span class="pill check">${SIDE[t]} hết nước đi, thua</span>`;
+  $('status').innerHTML=h;
+  const b=$('best');
+  if(!mine){b.className='best';b.innerHTML=`<div class="grow"><span class="lbl">Lượt đối thủ (${SIDE[t]})</span><span class="big">Nhập nước họ vừa đi</span><div class="muted">Bấm quân họ đã đi, rồi bấm ô họ đi tới. Nếu họ lật quân úp, chọn quân lộ ra.</div></div>`;return;}
+  b.className='best mine';
+  if(!analysis){b.innerHTML=`<div class="grow"><span class="lbl">Nước tốt nhất cho bạn (${SIDE[t]})</span><span class="big"><span class="spin" aria-hidden="true"></span>Đang tính nước tối ưu…</span><span class="muted sub">&nbsp;</span></div>${progBar()}`;return;}
+  if(analysis.none){b.innerHTML=`<div class="grow"><span class="lbl">Hết nước</span><span class="big">Bạn không còn nước đi hợp lệ</span></div>`;return;}
+  const h0=analysis.list[0],d=describe(h0.m);
+  b.innerHTML=`<div class="grow"><span class="lbl">Nước tốt nhất cho bạn (${SIDE[t]}) · ${fmtScore(h0.score)}${analysis.done?'':(analysis.riskPending?'<span class="spin sm" aria-hidden="true"></span>đang kiểm tra rủi ro lật quân…':'<span class="spin sm" aria-hidden="true"></span>đang tính sâu thêm…')}</span><span class="big" title="${d.main}">${d.main}</span><span class="muted sub" title="${d.sub?d.sub+riskNote(h0):''}">${d.sub?d.sub+riskNote(h0):'&nbsp;'}</span></div><button type="button" class="go" data-m="${h0.m}">Đi nước này</button>${analysis.done?'':progBar()}`;
+}
+document.getElementById('best').addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;sel=-1;targets=[];startMove(+b.dataset.m);});
+
+function poolTotal(c){let n=0;for(const t of E.TYPES)n+=st.pool[c][t];return n;}
+function drawPools(){
+  let h='';
+  for(const c of ['r','b']){
+    const tot=poolTotal(c);let onBoard=0;for(const p of st.B)if(p&&p.c===c&&p.t==='?')onBoard++;
+    h+=`<div class="pool"><h3><span class="pill" style="padding:2px 8px"><span class="dot" style="background:${c==='r'?'var(--red)':'var(--ink)'}"></span>${SIDE[c]}</span> <span class="muted">${onBoard} quân úp trên bàn${st.uc[c]?`, ${st.uc[c]} bị ăn không rõ`:''}</span></h3>`;
+    for(const t of E.TYPES){const n=st.pool[c][t],pct=tot?Math.round(n/tot*100):0;
+      h+=`<div class="prow${n?'':' zero'}"><span class="ch" style="color:${c==='r'?'var(--red)':'var(--fg)'}">${CH[c][t]}</span><span>${NAMES[t]}</span><span>${n}</span><span class="bar" title="${pct}%"><i style="width:${pct}%"></i></span></div>`;}
+    h+='</div>';
+  }
+  $('pools').innerHTML=h;
+}
+
+function drawLog(){
+  $('log').innerHTML=st.log.map(x=>`<li>${x}</li>`).join('')||'<li class="muted" style="list-style:none;margin-left:-28px">Chưa có nước nào. Đỏ đi trước.</li>';
+  $('movecount').textContent=st.log.length?`${st.log.length} nước`:'';
+  const el=$('log');el.scrollTop=el.scrollHeight;
+}
+
+function fmtScore(s){if(s>E.MATE/2)return'Thắng';if(s<-E.MATE/2)return'Thua';const v=s/100;return(v>0?'+':'')+v.toFixed(1);}
+function describe(m){
+  const fr=(m/90)|0,to=m%90,p=st.B[fr],q=st.B[to];
+  const name=p.t==='?'?`${NAMES[p.o]} giả`:NAMES[p.t];
+  let sub=p.t==='?'?'Lật quân':'';
+  if(q)sub+=(sub?' · ':'')+'Ăn '+(q.t==='?'?'quân úp':NAMES[q.t]);
+  return{main:`${name} ${coord(fr)} → ${coord(to)}`,sub};
+}
+// risk line for a flip move analysed by the JS engine (per-reveal outcomes)
+function riskNote(h){
+  if(!h||!h.worst)return'';
+  const w=h.worst;return ` · TB ${fmtScore(h.mean)}, xấu nhất nếu lật ra ${NAMES[w.t]} (${Math.round(w.p*100)}%): ${fmtScore(w.score)}`;
+}
+function drawHints(){
+  const ul=$('hints');
+  if(st.turn!==st.me){ul.innerHTML=`<li class="muted">Đang chờ bạn nhập nước của đối thủ. Gợi ý sẽ hiện khi đến lượt bạn.</li>`;$('depth').textContent='';return;}
+  if(!analysis){ul.innerHTML='<li class="skel" aria-label="Đang tính"></li><li class="skel"></li><li class="skel"></li>';$('depth').textContent='';return;}
+  if(analysis.none){ul.innerHTML='<li class="muted">Không còn nước hợp lệ.</li>';$('depth').textContent='';return;}
+  $('depth').textContent=`Gợi ý cho ${SIDE[st.turn]} · ${engineLabel} · độ sâu ${analysis.depth}${analysis.done?'':' …'}`;
+  $('engine-warn').hidden=engineLabel!=='JS';
+  ul.innerHTML=analysis.list.slice(0,HINTS).map((h,i)=>{const d=describe(h.m);
+    return `<li><button type="button" data-m="${h.m}"><span class="rank">${i+1}</span><span class="mv"><b>${d.main}</b><small title="${d.sub?d.sub+riskNote(h):''}">${d.sub?d.sub+riskNote(h):'&nbsp;'}</small></span><span class="score">${fmtScore(h.score)}</span></button></li>`;}).join('');
+}
+
+// ---- analysis ----
+let blobUrl=null;
+try{blobUrl=URL.createObjectURL(new Blob([ENGINE.toString()+`
+const E=ENGINE();onmessage=e=>{const d=e.data;E.setVariant(d.variant);const r=E.analyse(d.B,d.c,d.pool,d.ms,res=>postMessage({id:d.id,r:res,done:false}),d.hist);postMessage({id:d.id,r,done:true});};`],{type:'text/javascript'}));}catch(e){blobUrl=null;}
+// ---- Pikafish (via local server.js) ----
+// Where server.js may be: the same origin (page served by it), port 8765 on the host the page came
+// from (page served by another web server, e.g. python http.server), or this machine (page opened from disk).
+const API_CANDIDATES=[...new Set([
+  ...(location.protocol.startsWith('http')?['',`${location.protocol}//${location.hostname}:8765`]:[]),
+  'http://127.0.0.1:8765'])];
+let API='';
+let pika=null,pikaXQ=null,es=null,engineLabel='JS',pikaChecked=0;   // pikaXQ: standard-Xiangqi engine name   // pika: null = unknown, false = unavailable, string = engine name
+async function checkPika(){
+  for(const base of API_CANDIDATES){
+    try{const r=await fetch(base+'/health',{cache:'no-store'});
+      if(!r.ok)continue;const j=await r.json();
+      if(j&&j.ok){API=base;pika=j.engine||(j.engines&&j.engines.jieqi)||false;pikaXQ=(j.engines&&j.engines.xiangqi)||null;return;}}catch(e){}
+  }
+  pika=false;
+}
+function toFen(S){
+  const PC={K:'K',A:'A',E:'B',H:'N',R:'R',C:'C',P:'P'};
+  const rows=[];
+  for(let r=9;r>=0;r--){let row='',gap=0;
+    for(let f=0;f<9;f++){const p=S.B[r*9+f];
+      if(!p){gap++;continue;}
+      if(gap){row+=gap;gap=0;}
+      const ch=p.t==='?'?'X':PC[p.t];row+=p.c==='r'?ch:ch.toLowerCase();}
+    if(gap)row+=gap;rows.push(row);}
+  let pool='';
+  for(const c of ['r','b'])for(const t of E.TYPES){const n=Math.min(9,S.pool[c][t]|0);if(n){const ch=PC[t];pool+=(c==='r'?ch:ch.toLowerCase())+n;}}
+  if(S.variant==='xiangqi')return `${rows.join('/')} ${S.turn==='r'?'w':'b'} - - 0 1`;
+  return `${rows.join('/')} ${S.turn==='r'?'w':'b'} ${pool||'-'} 0 1`;
+}
+// The engine needs the recent move history to see repetitions (perpetual check loses in Xiangqi rules).
+// Walk back over moves that did not involve a face-down piece (those never change hidden information),
+// then send the FEN of that earlier position plus the moves since.
+const sqName=s=>'abcdefghi'[s%9]+((s/9)|0);
+function recentHistory(){
+  // earlier states, oldest first, back to the last move that involved a face-down piece
+  let cur=st;const states=[],moves=[];
+  for(let k=st.hist.length-1;k>=0&&moves.length<120;k--){
+    if(!cur.last)break;
+    const prev=JSON.parse(st.hist[k]);const[fr,to]=cur.last;
+    const p=prev.B[fr],q=prev.B[to];
+    if(!p||p.t==='?'||(q&&q.t==='?')||JSON.stringify(prev.pool)!==JSON.stringify(cur.pool))break;
+    moves.unshift(sqName(fr)+sqName(to));states.unshift(prev);cur=prev;
+  }
+  return{first:cur,states,moves};
+}
+function enginePosition(){const h=recentHistory();return{fen:toFen(h.first),moves:h.moves.join(' ')};}
+const uciToMove=u=>{const sq=x=>(+x[1])*9+'abcdefghi'.indexOf(x[0]);return sq(u.slice(0,2))*90+sq(u.slice(2,4));};
+function analysePika(id){
+  let got=false;
+  const pos=enginePosition();
+  es=new EventSource(`${API}/analyse?fen=${encodeURIComponent(pos.fen)}&moves=${encodeURIComponent(pos.moves)}&ms=${THINK_MS}&multipv=${HINTS}&variant=${st.variant}`);
+  const mine=es;
+  es.onmessage=e=>{
+    if(id!==reqId){mine.close();return;}
+    const d=JSON.parse(e.data);
+    if(d.aborted){mine.close();return;}
+    if(d.list&&d.list.length){got=true;
+      analysis={depth:d.depth,list:d.list.map(x=>({m:uciToMove(x.uci),score:x.score})),done:false};
+      drawHints();drawBoard();drawStatus();}
+    if(d.done){mine.close();
+      if(analysis&&analysis.list)riskCheck(id);else if(analysis){analysis.done=true;drawHints();drawStatus();}}
+  };
+  es.onerror=()=>{mine.close();if(id!==reqId)return;
+    if(!got){pika=false;engineLabel='JS';analyseJS(id);}   // server went away: fall back to the JS engine
+    else if(analysis){analysis.done=true;drawHints();drawStatus();}};
+}
+// ---- probability layer on top of Pikafish ----
+// For each flip move among the top suggestions, evaluate every piece the flip could reveal
+// (Pikafish search on the position with that piece revealed), weight by the remaining-pool
+// probability, and subtract RISK x downside deviation so a move that loses a Xe 2 times in 15
+// ranks below a safe move with the same average.
+const RISK=0.5,RISK_MS=350,RISK_TOP=4;
+function pikaBest(fen,ms){
+  return new Promise((resolve,reject)=>{
+    const src=new EventSource(`${API}/analyse?fen=${encodeURIComponent(fen)}&ms=${ms}&multipv=1`);es=src;let last=null;
+    src.onmessage=e=>{const d=JSON.parse(e.data);if(d.list&&d.list.length)last=d.list[0].score;
+      if(d.done){src.close();if(d.aborted&&last===null)reject(new Error('aborted'));else resolve(last===null?-E.MATE:last);}};
+    src.onerror=()=>{src.close();reject(new Error('stream'));};
+  });
+}
+async function riskCheck(id){
+  const cands=analysis.list.slice(0,RISK_TOP).filter(h=>{const p=st.B[(h.m/90)|0];return p&&p.t==='?';});
+  analysis.riskPending=cands.length>0;drawStatus();drawHints();
+  try{
+    for(const h of cands){
+      const fr=(h.m/90)|0,to=h.m%90,p=st.B[fr],pc=st.pool[p.c];
+      const tot=E.TYPES.reduce((a,t)=>a+pc[t],0);if(!tot)continue;
+      const outs=[];
+      for(const t of E.TYPES){if(!pc[t])continue;
+        const S2={B:st.B.slice(),pool:{r:{...st.pool.r},b:{...st.pool.b}},turn:E.opp(st.turn)};
+        S2.B[to]={c:p.c,t,o:p.o};S2.B[fr]=null;S2.pool[p.c][t]--;
+        const v=await pikaBest(toFen(S2),RISK_MS);if(id!==reqId)return;
+        outs.push({t,p:pc[t]/tot,score:Math.max(-4000,Math.min(4000,-v))});}
+      const mean=outs.reduce((a,o)=>a+o.p*o.score,0);
+      const dd=Math.sqrt(outs.reduce((a,o)=>a+(o.score<mean?o.p*(mean-o.score)**2:0),0));
+      h.mean=Math.round(mean);h.outs=outs;h.worst=outs.reduce((a,o)=>o.score<a.score?o:a,outs[0]);
+      h.raw=h.score;h.score=Math.round(h.score-RISK*dd);
+      analysis.list.sort((a,b)=>b.score-a.score);drawHints();drawBoard();drawStatus();
+    }
+  }catch(e){if(id!==reqId)return;}
+  analysis.riskPending=false;analysis.done=true;drawHints();drawBoard();drawStatus();
+}
+function analyse(){
+  analysis=null;
+  if(worker){worker.terminate();worker=null;}
+  if(es){es.close();es=null;}
+  const id=++reqId;thinkStart=Date.now();
+  drawStatus();drawHints();
+  if(st.turn!==st.me){return;}
+  if(!E.legalMoves(st.B,st.turn).length){analysis={depth:0,list:[],none:true,done:true};drawHints();drawStatus();return;}
+  if(pika===false&&Date.now()-pikaChecked>5000)pika=null;   // server may have been started since
+  if(pika===null){pikaChecked=Date.now();checkPika().then(()=>{if(id===reqId)analyse();});return;}
+  const eng=st.variant==='xiangqi'?pikaXQ:pika;
+  if(pika&&eng){engineLabel=eng;analysePika(id);return;}
+  engineLabel='JS';analyseJS(id);
+}
+function analyseJS(id){
+  const fb=setTimeout(()=>{if(id===reqId&&!analysis){if(worker){worker.terminate();worker=null;}runSync(id);}},2500);
+  const payload={id,variant:st.variant,B:st.B,c:st.turn,pool:st.pool,ms:THINK_MS,hist:recentHistory().states.map(x=>({B:x.B,turn:x.turn}))};
+  let ok=false;
+  if(blobUrl){try{worker=new Worker(blobUrl);
+    worker.onmessage=e=>{if(e.data.id!==reqId)return;if(e.data.r){analysis={...e.data.r,done:e.data.done};drawHints();drawBoard();drawStatus();}};
+    worker.onerror=()=>{worker=null;runSync(id);};
+    worker.postMessage(payload);ok=true;}catch(e){ok=false;}}
+  if(!ok)runSync(id);
+}
+function runSync(id){
+  setTimeout(()=>{if(id!==reqId)return;const B=JSON.parse(JSON.stringify(st.B));
+    const r=E.analyse(B,st.turn,st.pool,600,null,recentHistory().states.map(x=>({B:x.B,turn:x.turn})));if(id!==reqId)return;analysis={...r,done:true};drawHints();drawBoard();drawStatus();},30);
+}
+
+// ---- input ----
+function legalFrom(s){return E.legalMoves(st.B,st.turn).filter(m=>((m/90)|0)===s).map(m=>m%90);}
+$('board').addEventListener('click',ev=>{
+  if(!$('modal').hidden)return;
+  const svg=$('board'),r=svg.getBoundingClientRect();
+  const vx=(ev.clientX-r.left)/r.width*568,vy=(ev.clientY-r.top)/r.height*628;
+  const x=Math.round((vx-M)/S),y=Math.round((vy-M)/S);
+  if(x<0||x>8||y<0||y>9)return;
+  const s=unview(x,y),p=st.B[s];
+  if(sel>=0&&targets.includes(s)){const m=sel*90+s;sel=-1;targets=[];startMove(m);return;}
+  if(p&&p.c===st.turn){sel=s;targets=legalFrom(s);}else{sel=-1;targets=[];}
+  drawBoard();
+});
+$('hints').addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(!b)return;sel=-1;targets=[];startMove(+b.dataset.m);});
+
+function startMove(m){
+  const fr=(m/90)|0,to=m%90,p=st.B[fr],q=st.B[to];
+  const steps=[];
+  if(p.t==='?')steps.push({kind:'flip',c:p.c,o:p.o});
+  // Only ask when YOU capture an enemy hidden piece (you see it). Your own hidden piece captured by the enemy stays unknown.
+  if(q&&q.t==='?'&&q.c!==st.me)steps.push({kind:'cap',c:q.c,o:q.o});
+  const ans={};
+  const next=i=>{if(i>=steps.length){closeModal();applyMove(m,ans.flip,ans.cap);return;}askType(steps[i],v=>{ans[steps[i].kind]=v;next(i+1);});};
+  next(0);
+}
+function askType(step,done){
+  const pc={...st.pool[step.c]};
+  // the flipping piece's own pick reduces availability for the capture step only if same color, which never happens here
+  const tot=E.TYPES.reduce((a,t)=>a+pc[t],0);
+  const title=step.kind==='flip'?`Quân ${SIDE[step.c]} ở vị trí ${NAMES[step.o]} lật ra là con gì?`:`Quân úp ${SIDE[step.c]} bị ăn là con gì?`;
+  let h=`<h3>${title}</h3><div class="choices">`;
+  for(const t of E.TYPES){const n=pc[t];const dis=tot>0&&n===0;
+    h+=`<button type="button" data-t="${t}"${dis?' disabled':''}><span class="ch" style="color:${step.c==='r'?'var(--red)':'var(--fg)'}">${CH[step.c][t]}</span>${NAMES[t]}<small>còn ${n}</small></button>`;}
+  if(step.kind==='cap')h+=`<button type="button" class="wide" data-t="">Không rõ</button>`;
+  h+=`</div><button type="button" id="cancel">Huỷ nước này</button>`;
+  $('sheet').innerHTML=h;$('modal').hidden=false;
+  $('sheet').querySelector('button[data-t]:not([disabled])')?.focus();
+  $('sheet').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.id==='cancel'){closeModal();drawBoard();return;}
+    if(b.dataset.t!==undefined)done(b.dataset.t||null);};
+}
+function closeModal(){$('modal').hidden=true;$('sheet').onclick=null;}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('modal').hidden){closeModal();drawBoard();}});
+
+function applyMove(m,flip,capType){
+  st.hist.push(snap());
+  const fr=(m/90)|0,to=m%90,p=st.B[fr],q=st.B[to];
+  let np=p;
+  if(p.t==='?'){np={c:p.c,t:flip,o:p.o};if(st.pool[p.c][flip]>0)st.pool[p.c][flip]--;}
+  if(q&&q.t==='?'){if(capType){if(st.pool[q.c][capType]>0)st.pool[q.c][capType]--;}else st.uc[q.c]++;}
+  st.B[to]=np;st.B[fr]=null;
+  let txt=`${SIDE[p.c]}: ${NAMES[np.t]} ${coord(fr)}→${coord(to)}${p.t==='?'?' (lật)':''}`;
+  if(q)txt+=` ăn ${q.t==='?'?(capType?NAMES[capType]+' úp':'quân úp'):NAMES[q.t]}`;
+  st.log.push(txt);st.last=[fr,to];st.turn=E.opp(st.turn);
+  save();render();analyse();
+}
+
+$('undo').onclick=()=>{const h=st.hist.pop();if(!h)return;const hist=st.hist;st={...JSON.parse(h),hist};sel=-1;targets=[];save();render();analyse();};
+let resetArmed=false;
+$('reset').onclick=()=>{if(!resetArmed){resetArmed=true;$('reset').textContent='Bấm lần nữa để xoá ván';setTimeout(()=>{resetArmed=false;$('reset').textContent='Ván mới';},2500);return;}
+  resetArmed=false;$('reset').textContent='Ván mới';clearCache();st=freshState(st.me,st.variant);sel=-1;targets=[];render();askSide();};
+function clearCache(){
+  // stop any running analysis and drop its results
+  reqId++;if(worker){worker.terminate();worker=null;}analysis=null;
+  // remove the saved game (and any older saved versions) from browser storage
+  try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith('coup-'))localStorage.removeItem(k);}}catch(e){}
+}
+function setMe(c){st.me=c;st.chosen=true;sel=-1;targets=[];save();render();analyse();}
+// switching the kind of game starts a new game of that kind (same side)
+$('variant').addEventListener('click',e=>{const b=e.target.closest('button[data-variant]');if(!b||b.dataset.variant===st.variant)return;
+  if(st.log.length&&!confirm(`Chuyển sang ${VARIANTS[b.dataset.variant]} sẽ bắt đầu ván mới, ván hiện tại bị xoá. Tiếp tục?`))return;
+  clearCache();st=freshState(st.me,b.dataset.variant);st.chosen=true;sel=-1;targets=[];save();render();analyse();});
+$('me-r').onclick=()=>setMe('r');
+$('me-b').onclick=()=>setMe('b');
+function askSide(){
+  let variant=st.variant||'jieqi';
+  const draw=()=>{
+    $('sheet').innerHTML=`<h3>Ván mới</h3>
+      <div><div class="muted" style="margin-bottom:6px">Loại cờ</div><div class="seg" role="group" aria-label="Loại cờ">${Object.entries(VARIANTS).map(([k,v])=>`<button type="button" data-variant="${k}" aria-pressed="${k===variant}">${v}</button>`).join('')}</div></div>
+      <div class="muted">Bạn cầm quân nào? Đỏ luôn đi trước. Nếu bạn cầm Đen, hãy nhập nước đầu tiên của đối thủ trước.</div>
+      <div class="choices"><button type="button" data-side="r"><span class="ch" style="color:var(--red)">帥</span>Đỏ</button><button type="button" data-side="b"><span class="ch">將</span>Đen</button></div>`;};
+  draw();
+  $('modal').hidden=false;
+  $('sheet').onclick=e=>{
+    const v=e.target.closest('button[data-variant]');if(v){variant=v.dataset.variant;draw();return;}
+    const b=e.target.closest('button[data-side]');if(!b)return;
+    closeModal();
+    if(st.variant!==variant&&!st.log.length)st=freshState(b.dataset.side,variant);   // only a game not started yet can switch variant
+    setMe(b.dataset.side);};
+}
+
+render();if(!st.chosen&&!st.log.length)askSide();else analyse();
+})();
+</script>
+
+</html>

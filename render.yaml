@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: co-up
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: THREADS
+        value: "1"
+      - key: HASH
+        value: "16"
